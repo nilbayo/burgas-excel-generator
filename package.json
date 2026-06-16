@@ -1,0 +1,13 @@
+{
+  "name": "burgas-excel-generator",
+  "version": "1.0.0",
+  "description": "Generador Excel Burgas",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "exceljs": "^4.4.0",
+    "express": "^4.19.2"
+  }
+}
