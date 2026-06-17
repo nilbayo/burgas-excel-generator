@@ -17,31 +17,37 @@ app.post('/generar', async (req, res) => {
         await workbook.xlsx.readFile('./plantilla.xlsx');
 
         const worksheet = workbook.worksheets[0];
-const presupuesto = req.body.presupuesto;
+const presupuesto = req.body.presupuesto ?? {};
 
-// Cabecera
+// CABECERA
 worksheet.getCell('D2').value =
-    presupuesto.cliente_nombre ?? '';
+    presupuesto.cliente_nombre || '';
 
 worksheet.getCell('D3').value =
-    presupuesto.direccion ?? '';
+    presupuesto.direccion || '';
 
-// Mano de obra
+worksheet.getCell('H2').value =
+    presupuesto.id || '';
+
+worksheet.getCell('H3').value =
+    new Date().toLocaleDateString('es-ES');
+
+// MANO DE OBRA
 worksheet.getCell('A25').value =
-    Number(presupuesto.horas_oficial_primera ?? 0);
+    Number(presupuesto.horas_oficial_primera || 0);
 
 worksheet.getCell('A26').value =
-    Number(presupuesto.horas_ayudante ?? 0);
+    Number(presupuesto.horas_ayudante || 0);
 
 worksheet.getCell('A27').value =
-    Number(presupuesto.horas_oficina ?? 0);
+    Number(presupuesto.horas_oficina || 0);
 
 worksheet.getCell('A28').value =
-    Number(presupuesto.numero_desplazamientos ?? 0);
+    Number(presupuesto.numero_desplazamientos || 0);
 
-// Incremento material
+// INCREMENTO MATERIAL
 worksheet.getCell('C29').value =
-    Number(presupuesto.incremento_material_pct ?? 0) / 100;
+    Number(presupuesto.incremento_material_pct || 0) / 100;
 
         res.setHeader(
             'Content-Type',
