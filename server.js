@@ -17,10 +17,31 @@ app.post('/generar', async (req, res) => {
         await workbook.xlsx.readFile('./plantilla.xlsx');
 
         const worksheet = workbook.worksheets[0];
+const presupuesto = req.body.presupuesto;
 
-        // PRUEBA: escribir texto en la plantilla
-        worksheet.getCell('D5').value = 'PRUEBA BURGAS';
-        worksheet.getCell('D6').value = 'Carrer Nou 123';
+// Cabecera
+worksheet.getCell('D2').value =
+    presupuesto.cliente_nombre ?? '';
+
+worksheet.getCell('D3').value =
+    presupuesto.direccion ?? '';
+
+// Mano de obra
+worksheet.getCell('A25').value =
+    Number(presupuesto.horas_oficial_primera ?? 0);
+
+worksheet.getCell('A26').value =
+    Number(presupuesto.horas_ayudante ?? 0);
+
+worksheet.getCell('A27').value =
+    Number(presupuesto.horas_oficina ?? 0);
+
+worksheet.getCell('A28').value =
+    Number(presupuesto.numero_desplazamientos ?? 0);
+
+// Incremento material
+worksheet.getCell('C29').value =
+    Number(presupuesto.incremento_material_pct ?? 0) / 100;
 
         res.setHeader(
             'Content-Type',
