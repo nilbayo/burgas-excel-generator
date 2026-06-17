@@ -19,7 +19,8 @@ app.post('/generar', async (req, res) => {
         const worksheet = workbook.worksheets[0];
 
         // PRUEBA: escribir texto en la plantilla
-        worksheet.getCell('F2').value = 'PRUEBA RAILWAY';
+        worksheet.getCell('D5').value = 'PRUEBA BURGAS';
+        worksheet.getCell('D6').value = 'Carrer Nou 123';
 
         res.setHeader(
             'Content-Type',
