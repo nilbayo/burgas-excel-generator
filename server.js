@@ -19,6 +19,7 @@ const TEXTOS = {
     equipo: 'Equip',
     subtotalMateriales: 'Subtotal materials',
     descuentoMateriales: 'Descompte materials',
+    subtotalMaterialesFinal: 'Subtotal materials final',
     horasOficial: 'Hores Oficial 1a',
     horasAyudante: 'Hores Ajudant',
     horasOficina: 'Hores Oficina',
@@ -40,20 +41,22 @@ const BLOQUE_ACTIVO = {
     lineas: [16, 17, 18, 19, 20, 21],
     textos: {
         equipo: 'B13',
-        subtotalMateriales: 'C23',
-        descuentoMateriales: 'C24',
+        subtotalMateriales: 'C22',
+        descuentoMateriales: 'C23',
+        subtotalMaterialesFinal: 'C24',
         horasOficial: 'B25',
         horasAyudante: 'B26',
         horasOficina: 'B27',
         desplazamiento: 'B28',
         incrementoMaterial: 'B29',
         subtotal: 'C30',
-        iva: 'D31',
+        iva: 'A31',
         total: 'C31'
     },
     costes: {
-        subtotalMateriales: 'E23',
-        descuentoMateriales: 'E24',
+        subtotalMateriales: 'E22',
+        descuentoMateriales: 'E23',
+        subtotalMaterialesFinal: 'E24',
         horasOficial: 'A25',
         costeOficial: 'E25',
         horasAyudante: 'A26',
@@ -63,9 +66,9 @@ const BLOQUE_ACTIVO = {
         desplazamientos: 'A28',
         costeDesplazamientos: 'E28',
         incrementoMaterialPct: 'C29',
-        subtotalMaterialesFinal: 'E30',
+        incrementoMaterial: 'E29',
         subtotal: 'E30',
-        iva: 'F31',
+        iva: 'D31',
         total: 'E31'
     }
 };
@@ -102,6 +105,12 @@ function normalizar(valor) {
 
 function valorPresupuesto(presupuesto, campo) {
     return numeroRecibido(presupuesto[campo]);
+}
+
+function valorPorcentaje(valor) {
+    const numero = numeroRecibido(valor);
+
+    return typeof numero === 'number' ? numero / 100 : numero;
 }
 
 function escribir(worksheet, celda, valor) {
@@ -210,6 +219,7 @@ function mapearTextosCostes(worksheet, bloque) {
     escribirTextoSiVacio(worksheet, textos.equipo, TEXTOS.equipo);
     escribirTextoSiVacio(worksheet, textos.subtotalMateriales, TEXTOS.subtotalMateriales);
     escribirTextoSiVacio(worksheet, textos.descuentoMateriales, TEXTOS.descuentoMateriales);
+    escribirTextoSiVacio(worksheet, textos.subtotalMaterialesFinal, TEXTOS.subtotalMaterialesFinal);
     escribirTextoSiVacio(worksheet, textos.horasOficial, TEXTOS.horasOficial);
     escribirTextoSiVacio(worksheet, textos.horasAyudante, TEXTOS.horasAyudante);
     escribirTextoSiVacio(worksheet, textos.horasOficina, TEXTOS.horasOficina);
@@ -251,7 +261,6 @@ function mapearLineas(worksheet, lineas, bloque, presupuesto) {
 // Costes finales recibidos ya calculados. Railway solo los coloca en celdas.
 function mapearCostes(worksheet, presupuesto, bloque) {
     const costes = bloque.costes;
-    const incrementoMaterialPct = numeroRecibido(presupuesto.incremento_material_pct);
 
     mapearTextosCostes(worksheet, bloque);
 
@@ -271,11 +280,8 @@ function mapearCostes(worksheet, presupuesto, bloque) {
     escribir(worksheet, costes.desplazamientos, valorPresupuesto(presupuesto, 'numero_desplazamientos'));
     escribir(worksheet, costes.costeDesplazamientos, valorPresupuesto(presupuesto, 'coste_desplazamientos'));
 
-    escribir(
-        worksheet,
-        costes.incrementoMaterialPct,
-        typeof incrementoMaterialPct === 'number' ? incrementoMaterialPct / 100 : incrementoMaterialPct
-    );
+    escribir(worksheet, costes.incrementoMaterialPct, valorPorcentaje(presupuesto.incremento_material_pct));
+    escribir(worksheet, costes.incrementoMaterial, valorPresupuesto(presupuesto, 'incremento_material'));
 
     escribir(worksheet, costes.subtotal, valorPresupuesto(presupuesto, 'subtotal'));
     escribir(worksheet, costes.iva, valorPresupuesto(presupuesto, 'iva'));
