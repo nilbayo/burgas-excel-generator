@@ -115,14 +115,14 @@ function configurarHoja(ws) {
   ws.mergeCells('H3:I3'); ws.getCell('H3').value = 'Data';
   ws.mergeCells('D4:F4'); ws.getCell('D4').value = 'Estat';
   ws.getCell('G4').value = 'Pendent de revisió';
-  ws.mergeCells('H4:I4'); ws.getCell('H4').value = { formula: 'H72' };
+  ws.mergeCells('H4:I4'); ws.getCell('H4').value = '';
 
   ['D3','D4','H3','H4'].forEach(c => {
     ws.getCell(c).font = { bold: true, color: { argb: '1F3763' } };
     ws.getCell(c).alignment = { horizontal: 'right' };
   });
   ws.getCell('I3').numFmt = 'dd/mm/yyyy';
-  ws.getCell('H4').numFmt = '0%';
+  // H4 se deja libre para futuras notas internas; no debe contener una fórmula.
 
   try {
     const logoId = ws.workbook.addImage({ base64: LOGO_BURGAS_BASE64, extension: 'jpeg' });
@@ -298,6 +298,67 @@ function escribirLinea(ws, fila, linea, tipoDefecto) {
   escribir(ws, `G${fila}`, descuentoLinea(linea));
   escribir(ws, `I${fila}`, texto(primerValor(linea, ['notas', 'notes', 'motivo', 'justificacion', 'justificacio'], '')));
 }
+
+
+function valorNumericoCelda(ws, celda, defecto = 0) {
+  const valor = ws.getCell(celda).value;
+  if (valor && typeof valor === 'object' && Object.prototype.hasOwnProperty.call(valor, 'result')) {
+    return numero(valor.result, defecto);
+  }
+  return numero(valor, defecto);
+}
+
+function ponerFormulaConResultado(ws, celda, formula, resultado, numFmt) {
+  ws.getCell(celda).value = { formula, result: resultado };
+  if (numFmt) ws.getCell(celda).numFmt = numFmt;
+}
+
+function recalcularResultadosFormulas(ws) {
+  // ExcelJS escribe fórmulas, pero no las calcula. Si el archivo se abre con Vista Previa/QuickLook
+  // o en herramientas que no recalculan al abrir, los totales se ven vacíos si no guardamos
+  // también el resultado cacheado. Aquí guardamos fórmula + resultado inicial.
+  const rangos = [FILAS.equipo, FILAS.materiales, FILAS.manoObra];
+
+  for (const rango of rangos) {
+    for (let r = rango.inicio; r <= rango.fin; r++) {
+      const cantidad = valorNumericoCelda(ws, `D${r}`, null);
+      const precio = valorNumericoCelda(ws, `F${r}`, null);
+      const descuento = valorNumericoCelda(ws, `G${r}`, 0);
+      const formula = `IF(OR(D${r}="",F${r}=""),"",ROUND(D${r}*F${r}*(1-IF(G${r}="",0,G${r})),2))`;
+      const resultado = cantidad === null || precio === null ? '' : Math.round(cantidad * precio * (1 - descuento) * 100) / 100;
+      ponerFormulaConResultado(ws, `H${r}`, formula, resultado, '#,##0.00 €');
+    }
+  }
+
+  const sumarResultados = (inicio, fin) => {
+    let total = 0;
+    for (let r = inicio; r <= fin; r++) total += valorNumericoCelda(ws, `H${r}`, 0);
+    return Math.round(total * 100) / 100;
+  };
+
+  const subtotalEquip = sumarResultados(FILAS.equipo.inicio, FILAS.equipo.fin);
+  const subtotalMaterials = sumarResultados(FILAS.materiales.inicio, FILAS.materiales.fin);
+  const pctDescompte = valorNumericoCelda(ws, 'H67', 0);
+  const descompteMaterials = Math.round(subtotalMaterials * pctDescompte * 100) / 100;
+  const subtotalMaterialsFinal = Math.round((subtotalMaterials - descompteMaterials) * 100) / 100;
+  const subtotalMaObra = sumarResultados(FILAS.manoObra.inicio, FILAS.manoObra.fin);
+  const pctIncrement = valorNumericoCelda(ws, 'H70', 0);
+  const incrementMaterial = Math.round(subtotalMaterialsFinal * pctIncrement * 100) / 100;
+  const baseImposable = Math.round((subtotalEquip + subtotalMaterialsFinal + subtotalMaObra + incrementMaterial) * 100) / 100;
+  const pctIva = valorNumericoCelda(ws, 'H72', IVA_DEFECTO);
+  const iva = Math.round(baseImposable * pctIva * 100) / 100;
+  const total = Math.round((baseImposable + iva) * 100) / 100;
+
+  ponerFormulaConResultado(ws, 'I65', 'SUM(H16:H20)', subtotalEquip, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I66', 'SUM(H24:H48)', subtotalMaterials, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I67', 'ROUND(I66*H67,2)', descompteMaterials, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I68', 'I66-I67', subtotalMaterialsFinal, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I69', 'SUM(H52:H61)', subtotalMaObra, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I70', 'ROUND(I68*H70,2)', incrementMaterial, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I71', 'SUM(I65,I68,I69,I70)', baseImposable, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I72', 'ROUND(I71*H72,2)', iva, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I73', 'I71+I72', total, '#,##0.00 €');
+}
 function siguienteFilaLibre(filaActual, limite, bloque) {
   if (filaActual > limite) throw new Error(`La plantilla no tiene más filas disponibles para ${bloque}.`);
   return filaActual;
@@ -348,7 +409,7 @@ function mapearPorcentajesResumen(ws, presupuesto) {
   escribir(ws, 'H72', porcentaje(primerValor(presupuesto, ['iva_pct', 'iva_porcentaje'], IVA_DEFECTO), IVA_DEFECTO));
 }
 
-app.get('/', (req, res) => res.send('Burgas Excel Generator funcionando - v3'));
+app.get('/', (req, res) => res.send('Burgas Excel Generator funcionando - v4'));
 app.post('/generar', async (req, res) => {
   try {
     const { presupuesto, lineas } = obtenerPayload(req.body);
@@ -358,6 +419,7 @@ app.post('/generar', async (req, res) => {
     mapearLineas(worksheet, lineas, presupuesto);
     mapearManoObraYOtros(worksheet, presupuesto);
     mapearPorcentajesResumen(worksheet, presupuesto);
+    recalcularResultadosFormulas(worksheet);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', 'attachment; filename=pressupost-burgas.xlsx');
     await workbook.xlsx.write(res);
