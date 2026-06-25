@@ -793,6 +793,28 @@ function mapearManoObraYOtros(ws, presupuesto) {
     },
     {
       tipo: "Mà d'obra",
+      descripcion: 'Hores Oficial 2a',
+      cantidad: numero(
+        primerValor(presupuesto, ['horas_oficial_segunda', 'hores_oficial_segona'], 0),
+        0
+      ),
+      unidad: 'h',
+      precio_unitario: numero(
+        primerValor(
+          presupuesto,
+          ['tarifa_oficial_segunda', 'precio_hora_oficial_segunda'],
+          tarifaDesdeCosteTotal(
+            presupuesto,
+            'coste_oficial_segunda',
+            'horas_oficial_segunda',
+            TARIFA_OFICIAL_DEFECTO
+          )
+        ),
+        TARIFA_OFICIAL_DEFECTO
+      )
+    },
+    {
+      tipo: "Mà d'obra",
       descripcion: 'Hores Ajudant',
       cantidad: numero(
         primerValor(presupuesto, ['horas_ayudante', 'hores_ajudant'], 0),
@@ -1247,8 +1269,13 @@ function parseSaltokiPrices(html) {
     const codigo = String(match[1]).trim();
     const precioNeto = Number(String(match[2]).replace(',', '.'));
 
-    if (!codigo || Number.isNaN(precioNeto)) continue;
-    if (used.has(codigo)) continue;
+    if (!codigo || Number.isNaN(precioNeto)) {
+      continue;
+    }
+
+    if (used.has(codigo)) {
+      continue;
+    }
 
     used.add(codigo);
 
@@ -1273,12 +1300,16 @@ function parseSaltokiPrices(html) {
 function extractDiscountForSku(html, codigo) {
   const skuIndex = html.indexOf(`data-sku="${codigo}"`);
 
-  if (skuIndex === -1) return null;
+  if (skuIndex === -1) {
+    return null;
+  }
 
   const previousChunk = html.slice(Math.max(0, skuIndex - 700), skuIndex);
   const discountMatch = previousChunk.match(/Descuento:<\/span>\s*-([0-9]+(?:[,.][0-9]+)?)%/);
 
-  if (!discountMatch) return null;
+  if (!discountMatch) {
+    return null;
+  }
 
   const value = Number(String(discountMatch[1]).replace(',', '.'));
 
@@ -1293,7 +1324,9 @@ function extractTotalForSku(html, codigo) {
 
   const match = html.match(regex);
 
-  if (!match) return null;
+  if (!match) {
+    return null;
+  }
 
   const value = Number(String(match[1]).replace(',', '.'));
 
@@ -1319,7 +1352,7 @@ function sleep(ms) {
 }
 
 app.get('/', (req, res) => {
-  res.send('Burgas Excel Generator funcionando - v6.2 Saltoki precios reales');
+  res.send('Burgas Excel Generator funcionando - v6.3 Saltoki precios reales + oficial 2a');
 });
 
 app.post('/generar', async (req, res) => {
