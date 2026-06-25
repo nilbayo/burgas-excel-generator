@@ -950,7 +950,93 @@ function recalcularResultadosFormulas(ws) {
     FILAS.materiales,
     FILAS.manoObra
   ];
-  // =====================================================
+
+  for (const rango of rangos) {
+    for (let r = rango.inicio; r <= rango.fin; r++) {
+      const cantidad = valorNumericoCelda(ws, `D${r}`, null);
+      const precio = valorNumericoCelda(ws, `F${r}`, null);
+      const descuento = valorNumericoCelda(ws, `G${r}`, 0);
+
+      const formula =
+        `IF(OR(D${r}="",F${r}=""),"",ROUND(D${r}*F${r}*(1-IF(G${r}="",0,G${r})),2))`;
+
+      const resultado =
+        cantidad === null || precio === null
+          ? ''
+          : Math.round(cantidad * precio * (1 - descuento) * 100) / 100;
+
+      ponerFormulaConResultado(
+        ws,
+        `H${r}`,
+        formula,
+        resultado,
+        '#,##0.00 €'
+      );
+    }
+  }
+
+  const sumarResultados = (inicio, fin) => {
+    let total = 0;
+
+    for (let r = inicio; r <= fin; r++) {
+      total += valorNumericoCelda(ws, `H${r}`, 0);
+    }
+
+    return Math.round(total * 100) / 100;
+  };
+
+  const subtotalEquip = sumarResultados(
+    FILAS.equipo.inicio,
+    FILAS.equipo.fin
+  );
+
+  const subtotalMaterials = sumarResultados(
+    FILAS.materiales.inicio,
+    FILAS.materiales.fin
+  );
+
+  const pctDescompte = valorNumericoCelda(ws, 'H67', 0);
+  const descompteMaterials =
+    Math.round(subtotalMaterials * pctDescompte * 100) / 100;
+
+  const subtotalMaterialsFinal =
+    Math.round((subtotalMaterials - descompteMaterials) * 100) / 100;
+
+  const subtotalMaObra = sumarResultados(
+    FILAS.manoObra.inicio,
+    FILAS.manoObra.fin
+  );
+
+  const pctIncrement = valorNumericoCelda(ws, 'H70', 0);
+  const incrementMaterial =
+    Math.round(subtotalMaterialsFinal * pctIncrement * 100) / 100;
+
+  const baseImposable =
+    Math.round(
+      (
+        subtotalEquip +
+        subtotalMaterialsFinal +
+        subtotalMaObra +
+        incrementMaterial
+      ) * 100
+    ) / 100;
+
+  const pctIva = valorNumericoCelda(ws, 'H72', IVA_DEFECTO);
+  const iva = Math.round(baseImposable * pctIva * 100) / 100;
+  const total = Math.round((baseImposable + iva) * 100) / 100;
+
+  ponerFormulaConResultado(ws, 'I65', 'SUM(H16:H20)', subtotalEquip, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I66', 'SUM(H24:H48)', subtotalMaterials, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I67', 'ROUND(I66*H67,2)', descompteMaterials, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I68', 'I66-I67', subtotalMaterialsFinal, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I69', 'SUM(H52:H61)', subtotalMaObra, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I70', 'ROUND(I68*H70,2)', incrementMaterial, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I71', 'SUM(I65,I68,I69,I70)', baseImposable, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I72', 'ROUND(I71*H72,2)', iva, '#,##0.00 €');
+  ponerFormulaConResultado(ws, 'I73', 'I71+I72', total, '#,##0.00 €');
+}
+
+// =====================================================
 // SALTOKI ONLINE - CONSULTA PRECIOS REALES BURGAS
 // =====================================================
 
@@ -1232,93 +1318,8 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-  for (const rango of rangos) {
-    for (let r = rango.inicio; r <= rango.fin; r++) {
-      const cantidad = valorNumericoCelda(ws, `D${r}`, null);
-      const precio = valorNumericoCelda(ws, `F${r}`, null);
-      const descuento = valorNumericoCelda(ws, `G${r}`, 0);
-
-      const formula =
-        `IF(OR(D${r}="",F${r}=""),"",ROUND(D${r}*F${r}*(1-IF(G${r}="",0,G${r})),2))`;
-
-      const resultado =
-        cantidad === null || precio === null
-          ? ''
-          : Math.round(cantidad * precio * (1 - descuento) * 100) / 100;
-
-      ponerFormulaConResultado(
-        ws,
-        `H${r}`,
-        formula,
-        resultado,
-        '#,##0.00 €'
-      );
-    }
-  }
-
-  const sumarResultados = (inicio, fin) => {
-    let total = 0;
-
-    for (let r = inicio; r <= fin; r++) {
-      total += valorNumericoCelda(ws, `H${r}`, 0);
-    }
-
-    return Math.round(total * 100) / 100;
-  };
-
-  const subtotalEquip = sumarResultados(
-    FILAS.equipo.inicio,
-    FILAS.equipo.fin
-  );
-
-  const subtotalMaterials = sumarResultados(
-    FILAS.materiales.inicio,
-    FILAS.materiales.fin
-  );
-
-  const pctDescompte = valorNumericoCelda(ws, 'H67', 0);
-  const descompteMaterials =
-    Math.round(subtotalMaterials * pctDescompte * 100) / 100;
-
-  const subtotalMaterialsFinal =
-    Math.round((subtotalMaterials - descompteMaterials) * 100) / 100;
-
-  const subtotalMaObra = sumarResultados(
-    FILAS.manoObra.inicio,
-    FILAS.manoObra.fin
-  );
-
-  const pctIncrement = valorNumericoCelda(ws, 'H70', 0);
-  const incrementMaterial =
-    Math.round(subtotalMaterialsFinal * pctIncrement * 100) / 100;
-
-  const baseImposable =
-    Math.round(
-      (
-        subtotalEquip +
-        subtotalMaterialsFinal +
-        subtotalMaObra +
-        incrementMaterial
-      ) * 100
-    ) / 100;
-
-  const pctIva = valorNumericoCelda(ws, 'H72', IVA_DEFECTO);
-  const iva = Math.round(baseImposable * pctIva * 100) / 100;
-  const total = Math.round((baseImposable + iva) * 100) / 100;
-
-  ponerFormulaConResultado(ws, 'I65', 'SUM(H16:H20)', subtotalEquip, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I66', 'SUM(H24:H48)', subtotalMaterials, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I67', 'ROUND(I66*H67,2)', descompteMaterials, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I68', 'I66-I67', subtotalMaterialsFinal, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I69', 'SUM(H52:H61)', subtotalMaObra, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I70', 'ROUND(I68*H70,2)', incrementMaterial, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I71', 'SUM(I65,I68,I69,I70)', baseImposable, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I72', 'ROUND(I71*H72,2)', iva, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I73', 'I71+I72', total, '#,##0.00 €');
-}
-
 app.get('/', (req, res) => {
-  res.send('Burgas Excel Generator funcionando - v6 Saltoki precios reales');
+  res.send('Burgas Excel Generator funcionando - v6.2 Saltoki precios reales');
 });
 
 app.post('/generar', async (req, res) => {
