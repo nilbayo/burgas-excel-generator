@@ -950,6 +950,287 @@ function recalcularResultadosFormulas(ws) {
     FILAS.materiales,
     FILAS.manoObra
   ];
+  // =====================================================
+// SALTOKI ONLINE - CONSULTA PRECIOS REALES BURGAS
+// =====================================================
+
+app.post('/saltoki/precios', async (req, res) => {
+  try {
+    const apiKey = req.headers['x-api-key'];
+
+    if (process.env.SALTOKI_API_KEY && apiKey !== process.env.SALTOKI_API_KEY) {
+      return res.status(401).json({
+        ok: false,
+        error: 'No autorizado'
+      });
+    }
+
+    const codigosInput = req.body?.codigos;
+
+    if (!Array.isArray(codigosInput) || codigosInput.length === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: 'El body debe incluir codigos como array',
+        ejemplo: {
+          codigos: ['4050056112', '4050056712']
+        }
+      });
+    }
+
+    const codigos = [...new Set(
+      codigosInput
+        .map(codigo => String(codigo || '').trim())
+        .filter(Boolean)
+    )];
+
+    const resultados = [];
+    const errores = [];
+
+    for (const codigo of codigos) {
+      try {
+        const precio = await obtenerPrecioSaltoki(codigo);
+        resultados.push(precio);
+      } catch (error) {
+        errores.push({
+          codigo,
+          error: error.message
+        });
+      }
+
+      await sleep(300);
+    }
+
+    return res.json({
+      ok: true,
+      precios: resultados,
+      errores,
+      total_codigos: codigos.length,
+      total_precios: resultados.length,
+      fecha_consulta: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('[POST /saltoki/precios]', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error general consultando precios Saltoki',
+      detalle: error.message
+    });
+  }
+});
+
+app.post('/saltoki/precio', async (req, res) => {
+  try {
+    const apiKey = req.headers['x-api-key'];
+
+    if (process.env.SALTOKI_API_KEY && apiKey !== process.env.SALTOKI_API_KEY) {
+      return res.status(401).json({
+        ok: false,
+        error: 'No autorizado'
+      });
+    }
+
+    const codigo = String(req.body?.codigo || '').trim();
+
+    if (!codigo) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Falta el campo codigo'
+      });
+    }
+
+    const precio = await obtenerPrecioSaltoki(codigo);
+
+    return res.json({
+      ok: true,
+      ...precio
+    });
+
+  } catch (error) {
+    console.error('[POST /saltoki/precio]', error);
+
+    return res.status(500).json({
+      ok: false,
+      error: 'Error consultando precio Saltoki',
+      detalle: error.message
+    });
+  }
+});
+
+async function obtenerPrecioSaltoki(codigo) {
+  const productUrl = `https://online.saltoki.com/producto/x/${encodeURIComponent(codigo)}`;
+
+  const fichaResponse = await fetch(productUrl, {
+    method: 'GET',
+    headers: buildSaltokiHeaders({
+      accept: 'text/html, application/xhtml+xml',
+      referer: 'https://online.saltoki.com/'
+    })
+  });
+
+  if (!fichaResponse.ok) {
+    throw new Error(`No se pudo cargar ficha producto ${codigo}. Status: ${fichaResponse.status}`);
+  }
+
+  const fichaHtml = await fichaResponse.text();
+
+  if (isLoginPage(fichaHtml)) {
+    throw new Error('Sesión Saltoki caducada o no autenticada');
+  }
+
+  const tokenMatch = fichaHtml.match(/data-prices-skus-and-quantities-value="([^"]+)"/);
+
+  if (!tokenMatch) {
+    throw new Error(`No se encontró token de precios para ${codigo}`);
+  }
+
+  const pricesToken = tokenMatch[1];
+
+  const priceUrl = `https://online.saltoki.com/prices/${pricesToken}`;
+
+  const priceResponse = await fetch(priceUrl, {
+    method: 'GET',
+    headers: buildSaltokiHeaders({
+      accept: 'application/json, text/plain, */*',
+      referer: productUrl,
+      requestedWith: true
+    })
+  });
+
+  if (!priceResponse.ok) {
+    throw new Error(`No se pudo consultar /prices para ${codigo}. Status: ${priceResponse.status}`);
+  }
+
+  const priceHtml = await priceResponse.text();
+
+  if (isLoginPage(priceHtml)) {
+    throw new Error('Sesión Saltoki caducada al consultar precios');
+  }
+
+  const precios = parseSaltokiPrices(priceHtml);
+  const precioProducto = precios.find(p => p.codigo === codigo);
+
+  if (!precioProducto) {
+    throw new Error(`No se encontró precio neto para ${codigo}`);
+  }
+
+  return {
+    ...precioProducto,
+    product_url: productUrl
+  };
+}
+
+function buildSaltokiHeaders({ accept, referer, requestedWith = false }) {
+  if (!process.env.SALTOKI_COOKIE) {
+    throw new Error('Falta variable SALTOKI_COOKIE en Railway');
+  }
+
+  const headers = {
+    'Accept': accept,
+    'Cookie': process.env.SALTOKI_COOKIE,
+    'User-Agent': process.env.SALTOKI_USER_AGENT || 'Mozilla/5.0',
+    'Referer': referer || 'https://online.saltoki.com/',
+    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
+  };
+
+  if (requestedWith) {
+    headers['X-Requested-With'] = 'XMLHttpRequest';
+  }
+
+  if (process.env.SALTOKI_CSRF_TOKEN) {
+    headers['X-CSRF-TOKEN'] = process.env.SALTOKI_CSRF_TOKEN;
+  }
+
+  if (process.env.SALTOKI_XSRF_TOKEN) {
+    headers['X-XSRF-TOKEN'] = process.env.SALTOKI_XSRF_TOKEN;
+  }
+
+  return headers;
+}
+
+function parseSaltokiPrices(html) {
+  const prices = [];
+  const used = new Set();
+
+  const priceRegex = /data-sku="([^"]+)"[\s\S]*?data-net-price="([^"]+)"/g;
+
+  let match;
+
+  while ((match = priceRegex.exec(html)) !== null) {
+    const codigo = String(match[1]).trim();
+    const precioNeto = Number(String(match[2]).replace(',', '.'));
+
+    if (!codigo || Number.isNaN(precioNeto)) continue;
+    if (used.has(codigo)) continue;
+
+    used.add(codigo);
+
+    const descuentoPct = extractDiscountForSku(html, codigo);
+    const precioTotalLinea = extractTotalForSku(html, codigo);
+
+    prices.push({
+      codigo,
+      precio_neto: precioNeto,
+      precio_unitario: precioNeto,
+      precio_total_linea: precioTotalLinea,
+      descuento_pct: descuentoPct,
+      moneda: 'EUR',
+      fuente_precio: 'saltoki_online',
+      fecha_actualizacion: new Date().toISOString()
+    });
+  }
+
+  return prices;
+}
+
+function extractDiscountForSku(html, codigo) {
+  const skuIndex = html.indexOf(`data-sku="${codigo}"`);
+
+  if (skuIndex === -1) return null;
+
+  const previousChunk = html.slice(Math.max(0, skuIndex - 700), skuIndex);
+  const discountMatch = previousChunk.match(/Descuento:<\/span>\s*-([0-9]+(?:[,.][0-9]+)?)%/);
+
+  if (!discountMatch) return null;
+
+  const value = Number(String(discountMatch[1]).replace(',', '.'));
+
+  return Number.isFinite(value) ? value : null;
+}
+
+function extractTotalForSku(html, codigo) {
+  const regex = new RegExp(
+    `data-sku="${codigo}"[\\s\\S]*?data-total-net-price="([^"]+)"`,
+    'i'
+  );
+
+  const match = html.match(regex);
+
+  if (!match) return null;
+
+  const value = Number(String(match[1]).replace(',', '.'));
+
+  return Number.isFinite(value) ? value : null;
+}
+
+function isLoginPage(html) {
+  const text = String(html || '').toLowerCase();
+
+  return (
+    text.includes('login') &&
+    (
+      text.includes('password') ||
+      text.includes('contraseña') ||
+      text.includes('iniciar sesión') ||
+      text.includes('correo electrónico')
+    )
+  );
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
   for (const rango of rangos) {
     for (let r = rango.inicio; r <= rango.fin; r++) {
@@ -1037,7 +1318,7 @@ function recalcularResultadosFormulas(ws) {
 }
 
 app.get('/', (req, res) => {
-  res.send('Burgas Excel Generator funcionando - v5');
+  res.send('Burgas Excel Generator funcionando - v6 Saltoki precios reales');
 });
 
 app.post('/generar', async (req, res) => {
