@@ -448,6 +448,263 @@ function crearResumen(ws) {
   };
 }
 
+function observacionesPrincipales(presupuesto) {
+  const observaciones = texto(
+    primerValor(presupuesto, ['observaciones', 'observacions', 'notas'], '')
+  );
+
+  if (!observaciones) {
+    return '';
+  }
+
+  const marcador = '--- DADES TÈCNIQUES FORMULARI ---';
+
+  if (observaciones.includes(marcador)) {
+    return observaciones.split(marcador)[0].trim();
+  }
+
+  return observaciones;
+}
+
+function siNo(valor) {
+  if (valor === true || valor === 'true' || valor === 1 || valor === '1') {
+    return 'Sí';
+  }
+
+  if (valor === false || valor === 'false' || valor === 0 || valor === '0') {
+    return 'No';
+  }
+
+  return texto(valor);
+}
+
+function valorTecnico(objeto, ruta, defecto = '') {
+  try {
+    return ruta.split('.').reduce((acc, key) => acc?.[key], objeto) ?? defecto;
+  } catch (error) {
+    return defecto;
+  }
+}
+
+function escribirFilaTecnica(ws, fila, seccion, campo, valor) {
+  ws.getCell(`A${fila}`).value = seccion;
+  ws.getCell(`B${fila}`).value = campo;
+  ws.getCell(`C${fila}`).value =
+    valor === null || valor === undefined || valor === '' ? '' : valor;
+
+  ['A', 'B', 'C'].forEach(col => {
+    aplicarBordes(ws.getCell(`${col}${fila}`), 'D9E2F3');
+  });
+
+  ws.getCell(`A${fila}`).font = {
+    bold: true,
+    color: { argb: '1F3763' }
+  };
+
+  ws.getCell(`A${fila}`).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'EAF0FA' }
+  };
+
+  ws.getCell(`B${fila}`).font = {
+    bold: true
+  };
+
+  ws.getCell(`C${fila}`).alignment = {
+    wrapText: true,
+    vertical: 'top'
+  };
+}
+
+function crearHojaDatosTecnicos(workbook, presupuesto) {
+  const datos = presupuesto.datos_tecnicos || {};
+  const avisos = Array.isArray(presupuesto.avisos_revision)
+    ? presupuesto.avisos_revision
+    : [];
+
+  const ws = workbook.addWorksheet('DADES TÈCNIQUES');
+
+  ws.views = [{ showGridLines: false }];
+  ws.properties.defaultRowHeight = 20;
+
+  ws.getColumn('A').width = 26;
+  ws.getColumn('B').width = 38;
+  ws.getColumn('C').width = 48;
+  ws.getColumn('D').width = 18;
+
+  ws.mergeCells('A1:D1');
+  ws.getCell('A1').value = 'DADES TÈCNIQUES DE LA INSTAL·LACIÓ';
+  ws.getCell('A1').font = {
+    bold: true,
+    size: 16,
+    color: { argb: 'FFFFFF' }
+  };
+  ws.getCell('A1').fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: '1F3763' }
+  };
+  ws.getCell('A1').alignment = {
+    horizontal: 'center',
+    vertical: 'middle'
+  };
+
+  ws.getRow(1).height = 28;
+
+  ws.getCell('A3').value = 'Secció';
+  ws.getCell('B3').value = 'Camp';
+  ws.getCell('C3').value = 'Valor';
+
+  ['A3', 'B3', 'C3'].forEach(celda => {
+    ws.getCell(celda).font = {
+      bold: true,
+      color: { argb: 'FFFFFF' }
+    };
+    ws.getCell(celda).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: '2F4FA3' }
+    };
+    ws.getCell(celda).alignment = {
+      horizontal: 'center'
+    };
+    aplicarBordes(ws.getCell(celda));
+  });
+
+  let fila = 4;
+
+  const filas = [
+    ['Configuració', 'Configuració equip', valorTecnico(datos, 'configuracio.configuracion_equipo')],
+    ['Configuració', 'Unitats interiors', valorTecnico(datos, 'configuracio.numero_unidades_interiores')],
+    ['Configuració', 'Unitats exteriors', valorTecnico(datos, 'configuracio.numero_unidades_exteriores')],
+    ['Configuració', 'Potència manual kW', valorTecnico(datos, 'configuracio.potencia_manual_kw')],
+
+    ['Preinstal·lació', 'Hi ha preinstal·lació', valorTecnico(datos, 'preinstalacion.hay_preinstalacion')],
+    ['Preinstal·lació', 'Preinstal·lació aprofitable', valorTecnico(datos, 'preinstalacion.preinstalacion_aprovechable')],
+    ['Preinstal·lació', 'Retirar màquina existent', valorTecnico(datos, 'preinstalacion.retirar_maquina_existente')],
+
+    ['Ubicació', 'Unitat interior', valorTecnico(datos, 'ubicacion.ubicacion_unidad_interior')],
+    ['Ubicació', 'Unitat exterior', valorTecnico(datos, 'ubicacion.ubicacion_unidad_exterior')],
+    ['Ubicació', 'Planta unitat interior', valorTecnico(datos, 'ubicacion.planta_unidad_interior')],
+    ['Ubicació', 'Planta unitat exterior', valorTecnico(datos, 'ubicacion.planta_unidad_exterior')],
+    ['Ubicació', 'Dificultat accés exterior', valorTecnico(datos, 'ubicacion.dificultad_acceso_exterior')],
+
+    ['Canalització', 'Metres tuberia frigorífica', valorTecnico(datos, 'canalizacion.metros_tuberia')],
+    ['Canalització', 'Metres canaleta 90x60', valorTecnico(datos, 'canalizacion.metros_canaleta_90x60')],
+    ['Canalització', 'Angles interiors 90x60', valorTecnico(datos, 'canalizacion.num_angulos_interiores_90x60')],
+    ['Canalització', 'Angles exteriors 90x60', valorTecnico(datos, 'canalizacion.num_angulos_exteriores_90x60')],
+    ['Canalització', 'Tapes finals 90x60', valorTecnico(datos, 'canalizacion.num_tapas_finales_90x60')],
+    ['Canalització', 'Unions canaleta 90x60', valorTecnico(datos, 'canalizacion.num_uniones_canaleta_90x60')],
+
+    ['Electricitat', 'Cable interconnexió m', valorTecnico(datos, 'electricitat.metros_cable_interconexion')],
+    ['Electricitat', 'Necessita línia elèctrica', valorTecnico(datos, 'electricitat.necesita_linea_electrica')],
+    ['Electricitat', 'Cable alimentació m', valorTecnico(datos, 'electricitat.metros_cable_alimentacion')],
+    ['Electricitat', 'Tipus canal elèctrica', valorTecnico(datos, 'electricitat.tipo_canal_electrica')],
+    ['Electricitat', 'Metres canal elèctrica', valorTecnico(datos, 'electricitat.metros_canal_electrica')],
+    ['Electricitat', 'Necessita protecció elèctrica', valorTecnico(datos, 'electricitat.necesita_proteccion_electrica')],
+    ['Electricitat', 'Tipus protecció elèctrica', valorTecnico(datos, 'electricitat.tipo_proteccion_electrica')],
+    ['Electricitat', 'Amperatge magnetotèrmic', valorTecnico(datos, 'electricitat.amperaje_magnetotermico')],
+
+    ['Desguàs / condensats', 'Hi ha desguàs a prop', valorTecnico(datos, 'desguas_condensats.hay_desague_cerca')],
+    ['Desguàs / condensats', 'Necessita bomba condensats', valorTecnico(datos, 'desguas_condensats.necesita_bomba_condensados')],
+    ['Desguàs / condensats', 'Metres desguàs PVC', valorTecnico(datos, 'desguas_condensats.metros_desague_pvc')],
+    ['Desguàs / condensats', 'Diàmetre desguàs PVC', valorTecnico(datos, 'desguas_condensats.diametro_desague_pvc')],
+
+    ['Suport exterior', 'Tipus suport exterior', valorTecnico(datos, 'suport_exterior.tipo_soporte_exterior')],
+    ['Suport exterior', 'Silentblocks', valorTecnico(datos, 'suport_exterior.necesita_silentblocks')],
+
+    ['Gas', 'Càrrega suplementària', valorTecnico(datos, 'gas.necesita_carga_gas')],
+    ['Gas', 'Tipus gas', valorTecnico(datos, 'gas.tipo_gas')],
+    ['Gas', 'Metres extra gas', valorTecnico(datos, 'gas.metros_extra_gas')],
+
+    ['Paleteria', 'Necessita paleteria', valorTecnico(datos, 'paleteria.necesita_paleteria')],
+    ['Paleteria', 'Tipus paleteria', valorTecnico(datos, 'paleteria.tipo_paleteria')],
+    ['Paleteria', 'Cost paleteria manual', valorTecnico(datos, 'paleteria.coste_paleteria_manual')],
+    ['Paleteria', 'Observacions paleteria', valorTecnico(datos, 'paleteria.observaciones_paleteria')],
+
+    ['Seguretat', 'Treball en alçada', valorTecnico(datos, 'seguretat.trabajo_en_altura')],
+    ['Seguretat', 'Necessita línia de vida', valorTecnico(datos, 'seguretat.necesita_linea_vida')],
+    ['Seguretat', 'Necessita bastida', valorTecnico(datos, 'seguretat.necesita_andamio')],
+    ['Seguretat', 'Necessita plataforma', valorTecnico(datos, 'seguretat.necesita_plataforma')],
+    ['Seguretat', 'Observacions seguretat', valorTecnico(datos, 'seguretat.observaciones_seguridad')],
+
+    ['Mà d’obra', 'Hores oficial 1a', valorTecnico(datos, 'ma_obra.horas_oficial_primera')],
+    ['Mà d’obra', 'Hores oficial 2a', valorTecnico(datos, 'ma_obra.horas_oficial_segunda')],
+    ['Mà d’obra', 'Hores ajudant', valorTecnico(datos, 'ma_obra.horas_ayudante')],
+    ['Mà d’obra', 'Hores oficina', valorTecnico(datos, 'ma_obra.horas_oficina')],
+    ['Mà d’obra', 'Desplaçaments', valorTecnico(datos, 'ma_obra.numero_desplazamientos')]
+  ];
+
+  filas.forEach(([seccion, campo, valor]) => {
+    escribirFilaTecnica(ws, fila, seccion, campo, valor);
+    fila += 1;
+  });
+
+  fila += 2;
+
+  ws.mergeCells(`A${fila}:D${fila}`);
+  ws.getCell(`A${fila}`).value = 'AVISOS I LÍNIES PENDENTS DE REVISIÓ';
+  ws.getCell(`A${fila}`).font = {
+    bold: true,
+    color: { argb: 'FFFFFF' }
+  };
+  ws.getCell(`A${fila}`).fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: '9C6500' }
+  };
+
+  fila += 1;
+
+  ws.getCell(`A${fila}`).value = 'Referència';
+  ws.getCell(`B${fila}`).value = 'Descripció';
+  ws.getCell(`C${fila}`).value = 'Motiu';
+  ws.getCell(`D${fila}`).value = 'Total';
+
+  ['A', 'B', 'C', 'D'].forEach(col => {
+    ws.getCell(`${col}${fila}`).font = {
+      bold: true,
+      color: { argb: 'FFFFFF' }
+    };
+    ws.getCell(`${col}${fila}`).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'C65911' }
+    };
+    aplicarBordes(ws.getCell(`${col}${fila}`));
+  });
+
+  fila += 1;
+
+  if (!avisos.length) {
+    ws.mergeCells(`A${fila}:D${fila}`);
+    ws.getCell(`A${fila}`).value = 'No hi ha avisos de revisió.';
+    ws.getCell(`A${fila}`).font = {
+      italic: true,
+      color: { argb: '666666' }
+    };
+  } else {
+    avisos.forEach(aviso => {
+      ws.getCell(`A${fila}`).value = aviso.referencia || '';
+      ws.getCell(`B${fila}`).value = aviso.descripcion || '';
+      ws.getCell(`C${fila}`).value = aviso.motivo || '';
+      ws.getCell(`D${fila}`).value = numero(aviso.total, 0);
+      ws.getCell(`D${fila}`).numFmt = '#,##0.00 €';
+
+      ['A', 'B', 'C', 'D'].forEach(col => {
+        aplicarBordes(ws.getCell(`${col}${fila}`), 'E7EDF8');
+        ws.getCell(`${col}${fila}`).alignment = {
+          wrapText: true,
+          vertical: 'top'
+        };
+      });
+
+      fila += 1;
+    });
+  }
+}
+
 function crearWorkbookBase() {
   const workbook = new ExcelJS.Workbook();
 
@@ -540,7 +797,7 @@ function mapearCabecera(ws, presupuesto) {
   escribir(
     ws,
     'B12',
-    texto(primerValor(presupuesto, ['observaciones', 'observacions', 'notas']))
+    observacionesPrincipales(presupuesto)
   );
 }
 
@@ -575,7 +832,7 @@ function clasificarLinea(linea, indice) {
     tipo.includes('ALTRES') ||
     tipo.includes('OTROS')
   ) {
-    return 'otros';
+    return 'material';
   }
 
   return indice === 0 ? 'equipo' : 'material';
@@ -716,10 +973,6 @@ function mapearLineas(ws, lineas, presupuesto) {
 
   entrada.forEach((linea, indice) => {
     const clasificacion = clasificarLinea(linea, indice);
-
-    if (clasificacion === 'otros') {
-      return;
-    }
 
     if (clasificacion === 'equipo') {
       filaEquipo = siguienteFilaLibre(
@@ -1352,7 +1605,7 @@ function sleep(ms) {
 }
 
 app.get('/', (req, res) => {
-  res.send('Burgas Excel Generator funcionando - v6.3 Saltoki precios reales + oficial 2a');
+  res.send('Burgas Excel Generator funcionando - v6.4 Saltoki + dades tecniques');
 });
 
 app.post('/generar', async (req, res) => {
@@ -1367,6 +1620,7 @@ app.post('/generar', async (req, res) => {
     mapearManoObraYOtros(worksheet, presupuesto);
     mapearPorcentajesResumen(worksheet, presupuesto);
     recalcularResultadosFormulas(worksheet);
+    crearHojaDatosTecnicos(workbook, presupuesto);
 
     res.setHeader(
       'Content-Type',
