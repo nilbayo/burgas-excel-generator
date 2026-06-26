@@ -14,20 +14,35 @@ const IVA_DEFECTO = 0.21;
 
 const FILAS = {
   equipo: { inicio: 16, fin: 20 },
-  materiales: { inicio: 24, fin: 48 },
-  manoObra: { inicio: 52, fin: 61 }
+  materiales: { inicio: 24, fin: 70 },
+  trabajos: { inicio: 74, fin: 83 },
+  manoObra: { inicio: 87, fin: 96 }
+};
+
+const RESUMEN = {
+  header: 99,
+  subtotalEquip: 100,
+  subtotalMaterials: 101,
+  descuentoMaterials: 102,
+  subtotalMaterialsFinal: 103,
+  subtotalTrabajos: 104,
+  subtotalMaObra: 105,
+  incrementoMaterial: 106,
+  baseImposable: 107,
+  iva: 108,
+  total: 109
 };
 
 const COLS = [
   { key: 'tipo', width: 14 },
-  { key: 'codigo', width: 15 },
-  { key: 'descripcion', width: 42 },
+  { key: 'codigo', width: 17 },
+  { key: 'descripcion', width: 44 },
   { key: 'cantidad', width: 11 },
   { key: 'unidad', width: 9 },
   { key: 'precio', width: 13 },
   { key: 'descuento', width: 12 },
   { key: 'total', width: 14 },
-  { key: 'notas', width: 26 }
+  { key: 'notas', width: 30 }
 ];
 
 function texto(valor) {
@@ -140,6 +155,7 @@ function buscarLogo() {
 
     if (fs.existsSync(ruta)) {
       const buffer = fs.readFileSync(ruta);
+
       return {
         base64: buffer.toString('base64'),
         extension: candidato.extension
@@ -242,9 +258,12 @@ function configurarHoja(ws) {
   }
 
   crearBloqueDatos(ws);
+
   crearSeccionTabla(ws, 14, 'EQUIP PRINCIPAL');
   crearSeccionTabla(ws, 22, 'MATERIALS COMPLEMENTARIS');
-  crearSeccionTabla(ws, 50, 'MÀ D’OBRA I ALTRES');
+  crearSeccionTabla(ws, 72, 'TREBALLS ADDICIONALS / REVISIÓ');
+  crearSeccionTabla(ws, 85, 'MÀ D’OBRA I ALTRES');
+
   crearResumen(ws);
 
   ws.getRow(12).height = 45;
@@ -321,7 +340,7 @@ function crearSeccionTabla(ws, headerRow, titulo) {
   title.fill = {
     type: 'pattern',
     pattern: 'solid',
-    fgColor: { argb: '1F3763' }
+    fgColor: { argb: titulo.includes('REVISIÓ') ? '9C6500' : '1F3763' }
   };
 
   const row = headerRow + 1;
@@ -379,28 +398,29 @@ function prepararFilasTabla(ws, inicio, fin) {
 }
 
 function crearResumen(ws) {
-  ws.mergeCells('G64:I64');
-  ws.getCell('G64').value = 'RESUM ECONÒMIC';
-  ws.getCell('G64').font = {
+  ws.mergeCells(`G${RESUMEN.header}:I${RESUMEN.header}`);
+  ws.getCell(`G${RESUMEN.header}`).value = 'RESUM ECONÒMIC';
+  ws.getCell(`G${RESUMEN.header}`).font = {
     bold: true,
     color: { argb: 'FFFFFF' }
   };
-  ws.getCell('G64').fill = {
+  ws.getCell(`G${RESUMEN.header}`).fill = {
     type: 'pattern',
     pattern: 'solid',
     fgColor: { argb: '1F3763' }
   };
 
   const rows = [
-    [65, 'Subtotal equip', '', 'SUM(H16:H20)'],
-    [66, 'Subtotal materials', '', 'SUM(H24:H48)'],
-    [67, 'Descompte materials', 0, 'ROUND(I66*H67,2)'],
-    [68, 'Subtotal materials final', '', 'I66-I67'],
-    [69, 'Subtotal mà d’obra i altres', '', 'SUM(H52:H61)'],
-    [70, 'Increment material', 0, 'ROUND(I68*H70,2)'],
-    [71, 'Base imposable', '', 'SUM(I65,I68,I69,I70)'],
-    [72, 'IVA', IVA_DEFECTO, 'ROUND(I71*H72,2)'],
-    [73, 'TOTAL PRESSUPOST', '', 'I71+I72']
+    [RESUMEN.subtotalEquip, 'Subtotal equip', '', `SUM(H${FILAS.equipo.inicio}:H${FILAS.equipo.fin})`],
+    [RESUMEN.subtotalMaterials, 'Subtotal materials', '', `SUM(H${FILAS.materiales.inicio}:H${FILAS.materiales.fin})`],
+    [RESUMEN.descuentoMaterials, 'Descompte materials', 0, `ROUND(I${RESUMEN.subtotalMaterials}*H${RESUMEN.descuentoMaterials},2)`],
+    [RESUMEN.subtotalMaterialsFinal, 'Subtotal materials final', '', `I${RESUMEN.subtotalMaterials}-I${RESUMEN.descuentoMaterials}`],
+    [RESUMEN.subtotalTrabajos, 'Subtotal treballs addicionals', '', `SUM(H${FILAS.trabajos.inicio}:H${FILAS.trabajos.fin})`],
+    [RESUMEN.subtotalMaObra, 'Subtotal mà d’obra i altres', '', `SUM(H${FILAS.manoObra.inicio}:H${FILAS.manoObra.fin})`],
+    [RESUMEN.incrementoMaterial, 'Increment material', 0, `ROUND(I${RESUMEN.subtotalMaterialsFinal}*H${RESUMEN.incrementoMaterial},2)`],
+    [RESUMEN.baseImposable, 'Base imposable', '', `SUM(I${RESUMEN.subtotalEquip},I${RESUMEN.subtotalMaterialsFinal},I${RESUMEN.subtotalTrabajos},I${RESUMEN.subtotalMaObra},I${RESUMEN.incrementoMaterial})`],
+    [RESUMEN.iva, 'IVA', IVA_DEFECTO, `ROUND(I${RESUMEN.baseImposable}*H${RESUMEN.iva},2)`],
+    [RESUMEN.total, 'TOTAL PRESSUPOST', '', `I${RESUMEN.baseImposable}+I${RESUMEN.iva}`]
   ];
 
   rows.forEach(([r, label, pct, formula]) => {
@@ -415,16 +435,16 @@ function crearResumen(ws) {
       aplicarBordes(ws.getCell(`${col}${r}`));
     });
 
-    ws.getCell(`G${r}`).font = { bold: r === 73 };
+    ws.getCell(`G${r}`).font = { bold: r === RESUMEN.total };
     ws.getCell(`I${r}`).font = {
-      bold: r === 73,
-      size: r === 73 ? 14 : 11
+      bold: r === RESUMEN.total,
+      size: r === RESUMEN.total ? 14 : 11
     };
 
     ws.getCell(`H${r}`).numFmt = '0.00%';
     ws.getCell(`I${r}`).numFmt = '#,##0.00 €';
 
-    if (r === 73) {
+    if (r === RESUMEN.total) {
       ['G', 'H', 'I'].forEach(col => {
         ws.getCell(`${col}${r}`).fill = {
           type: 'pattern',
@@ -435,14 +455,14 @@ function crearResumen(ws) {
     }
   });
 
-  ws.mergeCells('A65:F73');
-  ws.getCell('A65').value =
-    'Document generat automàticament. Revisar i ajustar imports si és necessari abans d’enviar al client.';
-  ws.getCell('A65').font = {
+  ws.mergeCells(`A${RESUMEN.header}:F${RESUMEN.total}`);
+  ws.getCell(`A${RESUMEN.header}`).value =
+    'Document generat automàticament. Revisar imports i línies marcades com a revisió abans d’enviar al client.';
+  ws.getCell(`A${RESUMEN.header}`).font = {
     italic: true,
     color: { argb: '666666' }
   };
-  ws.getCell('A65').alignment = {
+  ws.getCell(`A${RESUMEN.header}`).alignment = {
     wrapText: true,
     vertical: 'top'
   };
@@ -464,18 +484,6 @@ function observacionesPrincipales(presupuesto) {
   }
 
   return observaciones;
-}
-
-function siNo(valor) {
-  if (valor === true || valor === 'true' || valor === 1 || valor === '1') {
-    return 'Sí';
-  }
-
-  if (valor === false || valor === 'false' || valor === 0 || valor === '0') {
-    return 'No';
-  }
-
-  return texto(valor);
 }
 
 function valorTecnico(objeto, ruta, defecto = '') {
@@ -719,6 +727,7 @@ function crearWorkbookBase() {
   configurarHoja(ws);
   prepararFilasTabla(ws, FILAS.equipo.inicio, FILAS.equipo.fin);
   prepararFilasTabla(ws, FILAS.materiales.inicio, FILAS.materiales.fin);
+  prepararFilasTabla(ws, FILAS.trabajos.inicio, FILAS.trabajos.fin);
   prepararFilasTabla(ws, FILAS.manoObra.inicio, FILAS.manoObra.fin);
 
   return workbook;
@@ -808,15 +817,17 @@ function valorTipoNormalizado(linea) {
 }
 
 function clasificarLinea(linea, indice) {
-  const tipo = valorTipoNormalizado(linea);
+  const codigo = texto(primerValor(linea, ['codigo', 'referencia', 'ref'], ''));
 
-  if (
-    tipo.includes('MATERIAL') ||
-    tipo.includes('MATERIALS') ||
-    tipo.includes('COMPLEMENTARI')
-  ) {
-    return 'material';
+  if (codigo.startsWith('MANUAL-')) {
+    return 'trabajo';
   }
+
+  if (linea.requiere_revision === true && texto(linea.origen_precio) === 'manual_formulario') {
+    return 'trabajo';
+  }
+
+  const tipo = valorTipoNormalizado(linea);
 
   if (
     tipo.includes('EQUIPO') ||
@@ -830,7 +841,16 @@ function clasificarLinea(linea, indice) {
   if (
     tipo.includes('OBRA') ||
     tipo.includes('ALTRES') ||
-    tipo.includes('OTROS')
+    tipo.includes('OTROS') ||
+    tipo.includes('TREBALL')
+  ) {
+    return 'trabajo';
+  }
+
+  if (
+    tipo.includes('MATERIAL') ||
+    tipo.includes('MATERIALS') ||
+    tipo.includes('COMPLEMENTARI')
   ) {
     return 'material';
   }
@@ -935,6 +955,16 @@ function escribirLinea(ws, fila, linea, tipoPorDefecto) {
   ws.getCell(`F${fila}`).numFmt = '#,##0.00 €';
   ws.getCell(`G${fila}`).numFmt = '0.00%';
   ws.getCell(`H${fila}`).numFmt = '#,##0.00 €';
+
+  if (codigoLinea(linea).startsWith('MANUAL-') || linea.requiere_revision === true) {
+    for (let c = 1; c <= 9; c++) {
+      ws.getCell(fila, c).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF2CC' }
+      };
+    }
+  }
 }
 
 function siguienteFilaLibre(filaActual, limite, bloque) {
@@ -970,6 +1000,7 @@ function mapearLineas(ws, lineas, presupuesto) {
 
   let filaEquipo = FILAS.equipo.inicio;
   let filaMaterial = FILAS.materiales.inicio;
+  let filaTrabajo = FILAS.trabajos.inicio;
 
   entrada.forEach((linea, indice) => {
     const clasificacion = clasificarLinea(linea, indice);
@@ -989,6 +1020,24 @@ function mapearLineas(ws, lineas, presupuesto) {
       );
 
       filaEquipo += 1;
+      return;
+    }
+
+    if (clasificacion === 'trabajo') {
+      filaTrabajo = siguienteFilaLibre(
+        filaTrabajo,
+        FILAS.trabajos.fin,
+        'treballs addicionals'
+      );
+
+      escribirLinea(
+        ws,
+        filaTrabajo,
+        { ...linea, tipo: 'Treball / revisió' },
+        'Treball / revisió'
+      );
+
+      filaTrabajo += 1;
       return;
     }
 
@@ -1169,11 +1218,11 @@ function mapearPorcentajesResumen(ws, presupuesto) {
     descuentoPct = descuentoMateriales / subtotalMateriales;
   }
 
-  escribir(ws, 'H67', descuentoPct === null || descuentoPct === '' ? 0 : descuentoPct);
+  escribir(ws, `H${RESUMEN.descuentoMaterials}`, descuentoPct === null || descuentoPct === '' ? 0 : descuentoPct);
 
   escribir(
     ws,
-    'H70',
+    `H${RESUMEN.incrementoMaterial}`,
     porcentaje(
       primerValor(
         presupuesto,
@@ -1186,7 +1235,7 @@ function mapearPorcentajesResumen(ws, presupuesto) {
 
   escribir(
     ws,
-    'H72',
+    `H${RESUMEN.iva}`,
     porcentaje(
       primerValor(presupuesto, ['iva_pct', 'iva_porcentaje'], IVA_DEFECTO),
       IVA_DEFECTO
@@ -1223,6 +1272,7 @@ function recalcularResultadosFormulas(ws) {
   const rangos = [
     FILAS.equipo,
     FILAS.materiales,
+    FILAS.trabajos,
     FILAS.manoObra
   ];
 
@@ -1270,19 +1320,24 @@ function recalcularResultadosFormulas(ws) {
     FILAS.materiales.fin
   );
 
-  const pctDescompte = valorNumericoCelda(ws, 'H67', 0);
-  const descompteMaterials =
-    Math.round(subtotalMaterials * pctDescompte * 100) / 100;
-
-  const subtotalMaterialsFinal =
-    Math.round((subtotalMaterials - descompteMaterials) * 100) / 100;
+  const subtotalTreballs = sumarResultados(
+    FILAS.trabajos.inicio,
+    FILAS.trabajos.fin
+  );
 
   const subtotalMaObra = sumarResultados(
     FILAS.manoObra.inicio,
     FILAS.manoObra.fin
   );
 
-  const pctIncrement = valorNumericoCelda(ws, 'H70', 0);
+  const pctDescompte = valorNumericoCelda(ws, `H${RESUMEN.descuentoMaterials}`, 0);
+  const descompteMaterials =
+    Math.round(subtotalMaterials * pctDescompte * 100) / 100;
+
+  const subtotalMaterialsFinal =
+    Math.round((subtotalMaterials - descompteMaterials) * 100) / 100;
+
+  const pctIncrement = valorNumericoCelda(ws, `H${RESUMEN.incrementoMaterial}`, 0);
   const incrementMaterial =
     Math.round(subtotalMaterialsFinal * pctIncrement * 100) / 100;
 
@@ -1291,24 +1346,26 @@ function recalcularResultadosFormulas(ws) {
       (
         subtotalEquip +
         subtotalMaterialsFinal +
+        subtotalTreballs +
         subtotalMaObra +
         incrementMaterial
       ) * 100
     ) / 100;
 
-  const pctIva = valorNumericoCelda(ws, 'H72', IVA_DEFECTO);
+  const pctIva = valorNumericoCelda(ws, `H${RESUMEN.iva}`, IVA_DEFECTO);
   const iva = Math.round(baseImposable * pctIva * 100) / 100;
   const total = Math.round((baseImposable + iva) * 100) / 100;
 
-  ponerFormulaConResultado(ws, 'I65', 'SUM(H16:H20)', subtotalEquip, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I66', 'SUM(H24:H48)', subtotalMaterials, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I67', 'ROUND(I66*H67,2)', descompteMaterials, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I68', 'I66-I67', subtotalMaterialsFinal, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I69', 'SUM(H52:H61)', subtotalMaObra, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I70', 'ROUND(I68*H70,2)', incrementMaterial, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I71', 'SUM(I65,I68,I69,I70)', baseImposable, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I72', 'ROUND(I71*H72,2)', iva, '#,##0.00 €');
-  ponerFormulaConResultado(ws, 'I73', 'I71+I72', total, '#,##0.00 €');
+  ponerFormulaConResultado(ws, `I${RESUMEN.subtotalEquip}`, `SUM(H${FILAS.equipo.inicio}:H${FILAS.equipo.fin})`, subtotalEquip, '#,##0.00 €');
+  ponerFormulaConResultado(ws, `I${RESUMEN.subtotalMaterials}`, `SUM(H${FILAS.materiales.inicio}:H${FILAS.materiales.fin})`, subtotalMaterials, '#,##0.00 €');
+  ponerFormulaConResultado(ws, `I${RESUMEN.descuentoMaterials}`, `ROUND(I${RESUMEN.subtotalMaterials}*H${RESUMEN.descuentoMaterials},2)`, descompteMaterials, '#,##0.00 €');
+  ponerFormulaConResultado(ws, `I${RESUMEN.subtotalMaterialsFinal}`, `I${RESUMEN.subtotalMaterials}-I${RESUMEN.descuentoMaterials}`, subtotalMaterialsFinal, '#,##0.00 €');
+  ponerFormulaConResultado(ws, `I${RESUMEN.subtotalTrabajos}`, `SUM(H${FILAS.trabajos.inicio}:H${FILAS.trabajos.fin})`, subtotalTreballs, '#,##0.00 €');
+  ponerFormulaConResultado(ws, `I${RESUMEN.subtotalMaObra}`, `SUM(H${FILAS.manoObra.inicio}:H${FILAS.manoObra.fin})`, subtotalMaObra, '#,##0.00 €');
+  ponerFormulaConResultado(ws, `I${RESUMEN.incrementoMaterial}`, `ROUND(I${RESUMEN.subtotalMaterialsFinal}*H${RESUMEN.incrementoMaterial},2)`, incrementMaterial, '#,##0.00 €');
+  ponerFormulaConResultado(ws, `I${RESUMEN.baseImposable}`, `SUM(I${RESUMEN.subtotalEquip},I${RESUMEN.subtotalMaterialsFinal},I${RESUMEN.subtotalTrabajos},I${RESUMEN.subtotalMaObra},I${RESUMEN.incrementoMaterial})`, baseImposable, '#,##0.00 €');
+  ponerFormulaConResultado(ws, `I${RESUMEN.iva}`, `ROUND(I${RESUMEN.baseImposable}*H${RESUMEN.iva},2)`, iva, '#,##0.00 €');
+  ponerFormulaConResultado(ws, `I${RESUMEN.total}`, `I${RESUMEN.baseImposable}+I${RESUMEN.iva}`, total, '#,##0.00 €');
 }
 
 // =====================================================
@@ -1605,7 +1662,7 @@ function sleep(ms) {
 }
 
 app.get('/', (req, res) => {
-  res.send('Burgas Excel Generator funcionando - v6.4 Saltoki + dades tecniques');
+  res.send('Burgas Excel Generator funcionando - v6.5 secciones ampliadas');
 });
 
 app.post('/generar', async (req, res) => {
